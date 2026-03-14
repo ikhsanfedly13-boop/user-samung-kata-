@@ -1,0 +1,645 @@
+-- FOCUSED USERNAME DETECTOR - Only type when YOUR TextBox is focused
+-- Solves masalah typing ke TextBox orang lain
+
+wait(3)
+
+-- Wait for essential services
+local Players = game:GetService("Players")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local UserInputService = game:GetService("UserInputService")
+
+-- Wait for LocalPlayer to be ready
+local LocalPlayer = Players.LocalPlayer
+if not LocalPlayer then
+    Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
+    LocalPlayer = Players.LocalPlayer
+end
+
+print("🔧 FEDLY HUB - Services ready!")
+print("  LocalPlayer:", LocalPlayer.Name)
+
+-- Create GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "FedlyHub"
+screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+screenGui.ResetOnSpawn = false
+
+-- Logo Button (Always visible, draggable)
+local logoBtn = Instance.new("TextButton")
+logoBtn.Size = UDim2.new(0, 50, 0, 50)
+logoBtn.Position = UDim2.new(0, 10, 0, 10)
+logoBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+logoBtn.Text = "FH"
+logoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+logoBtn.TextSize = 18
+logoBtn.Font = Enum.Font.SourceSansBold
+logoBtn.Active = true
+logoBtn.Draggable = true
+logoBtn.Parent = screenGui
+
+local logoCorner = Instance.new("UICorner")
+logoCorner.CornerRadius = UDim.new(0, 25) -- Make it circular
+logoCorner.Parent = logoBtn
+
+-- Main Frame (Hidden by default, draggable)
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 320, 0, 120)
+mainFrame.Position = UDim2.new(0, 70, 0, 10)
+mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+mainFrame.BackgroundTransparency = 0.1
+mainFrame.BorderSizePixel = 0
+mainFrame.Visible = false
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent = mainFrame
+
+-- Title
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -10, 0, 20)
+title.Position = UDim2.new(0, 5, 0, 5)
+title.BackgroundTransparency = 1
+title.Text = "FEDLY HUB - Database Kata 79K"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextSize = 12
+title.Font = Enum.Font.SourceSansBold
+title.Parent = mainFrame
+
+-- Database status (compact)
+local dbStatus = Instance.new("TextLabel")
+dbStatus.Size = UDim2.new(0.6, 0, 0, 15)
+dbStatus.Position = UDim2.new(0, 5, 0, 25)
+dbStatus.BackgroundTransparency = 1
+dbStatus.Text = "Database: Ready to load..."
+dbStatus.TextColor3 = Color3.fromRGB(255, 255, 0)
+dbStatus.TextSize = 10
+dbStatus.Font = Enum.Font.SourceSans
+dbStatus.Parent = mainFrame
+
+-- Control buttons (compact layout)
+local loadBtn = Instance.new("TextButton")
+loadBtn.Size = UDim2.new(0, 60, 0, 20)
+loadBtn.Position = UDim2.new(0, 5, 0, 45)
+loadBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 200)
+loadBtn.Text = "LOAD"
+loadBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+loadBtn.TextSize = 10
+loadBtn.Font = Enum.Font.SourceSansBold
+loadBtn.Parent = mainFrame
+
+local loadCorner = Instance.new("UICorner")
+loadCorner.CornerRadius = UDim.new(0, 4)
+loadCorner.Parent = loadBtn
+
+local startBtn = Instance.new("TextButton")
+startBtn.Size = UDim2.new(0, 60, 0, 20)
+startBtn.Position = UDim2.new(0, 75, 0, 45)
+startBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+startBtn.Text = "START"
+startBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+startBtn.TextSize = 10
+startBtn.Font = Enum.Font.SourceSansBold
+startBtn.Parent = mainFrame
+
+local startCorner = Instance.new("UICorner")
+startCorner.CornerRadius = UDim.new(0, 4)
+startCorner.Parent = startBtn
+
+local stopBtn = Instance.new("TextButton")
+stopBtn.Size = UDim2.new(0, 60, 0, 20)
+stopBtn.Position = UDim2.new(0, 145, 0, 45)
+stopBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+stopBtn.Text = "STOP"
+stopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+stopBtn.TextSize = 10
+stopBtn.Font = Enum.Font.SourceSans
+stopBtn.Parent = mainFrame
+
+local stopCorner = Instance.new("UICorner")
+stopCorner.CornerRadius = UDim.new(0, 4)
+stopCorner.Parent = stopBtn
+
+-- Status display (compact)
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(1, -10, 0, 20)
+statusLabel.Position = UDim2.new(0, 5, 0, 70)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "Status: Ready | Click LOAD then START"
+statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+statusLabel.TextSize = 9
+statusLabel.Font = Enum.Font.SourceSans
+statusLabel.TextWrapped = true
+statusLabel.Parent = mainFrame
+
+-- Stats (compact)
+local statsLabel = Instance.new("TextLabel")
+statsLabel.Size = UDim2.new(1, -10, 0, 15)
+statsLabel.Position = UDim2.new(0, 5, 0, 95)
+statsLabel.BackgroundTransparency = 1
+statsLabel.Text = "Success: 0 | Blocked: 0 | Database: Not loaded"
+statsLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+statsLabel.TextSize = 9
+statsLabel.Font = Enum.Font.SourceSans
+statsLabel.Parent = mainFrame
+
+-- Variables
+local isActive = false
+local databaseLoaded = false
+local successCount = 0
+local blockedCount = 0
+local lastProcessTime = 0
+local COOLDOWN_TIME = 1.5 -- Cukup untuk satu giliran, tidak terlalu lama
+local monitorConnections = {}
+local myTextBoxes = {} -- Store YOUR TextBoxes
+local currentFocusedTextBox = nil
+local pendingTyping = nil -- Store pending typing action
+local allWords = {} -- Database
+local menuVisible = false -- Menu visibility state
+local usedWords = {} -- Track used words to prevent repeats
+local consecutiveFailures = 0 -- Track consecutive failures
+
+-- GitHub URL for 79k words
+local GITHUB_79K_URL = "https://raw.githubusercontent.com/geovedi/indonesian-wordlist/master/00-indonesian-wordlist.lst"
+
+-- Logo button click handler (Toggle menu)
+logoBtn.MouseButton1Click:Connect(function()
+    menuVisible = not menuVisible
+    mainFrame.Visible = menuVisible
+    
+    if menuVisible then
+        logoBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+        print("📱 FEDLY HUB - Menu opened")
+    else
+        logoBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+        print("📱 FEDLY HUB - Menu closed")
+    end
+end)
+
+-- Fallback database (backup jika download gagal) - NO SYMBOLS
+local fallbackWords = {
+    "apel", "ayam", "anak", "air", "api", "awan", "akar", "alam", "alat", "aman", "angin", "angka", "anjing", "antara", "apa", "arah", "arus", "asli", "atas", "atau", "awak", "awal",
+    "buku", "bola", "buah", "batu", "burung", "baju", "baik", "banyak", "barat", "baru", "bawah", "benar", "besar", "berat", "bebas", "belum", "benang", "bentuk", "beras", "besi", "biasa", "biru", "bisa", "bintang", "bicara", "bunyi", "bulan", "bunga",
+    "cinta", "catur", "cumi", "cabe", "cicak", "cari", "cara", "cantik", "cahaya", "cepat", "cerita", "coba", "coklat", "cuaca", "cuci", "cukup", "cuma", "curi", "cacing", "calon", "campur", "canda", "capek", "catat", "cawan",
+    "daun", "daging", "dalam", "dekat", "dingin", "dapat", "darah", "dasar", "datang", "diri", "dengan", "dinding", "dimana", "duduk", "dunia", "dua", "dulu", "desa", "dokter", "drama", "dompet", "danau", "dansa", "dapur", "darat",
+    "ekor", "elang", "empat", "enak", "emas", "emosi", "energi", "entah", "era", "esok", "eyang", "ekonomi", "ekspor", "ekspres",
+    "foto", "film", "fakta", "fisik", "formal", "fungsi", "fase", "faktor", "fantasi", "fashion", "festival",
+    "garam", "gajah", "gunung", "gelas", "gambar", "gadis", "garpu", "garis", "gigi", "gila", "gitar", "global", "gosip", "guru", "gula", "garasi", "gerbang", "gerakan", "gigih", "giliran",
+    "hati", "hari", "hijau", "hitam", "hewan", "harus", "habis", "halus", "harap", "harmoni", "hasil", "harga", "hebat", "hidup", "hilang", "hingga", "hitung", "hobi", "hujan", "hutan",
+    "ikan", "ibu", "indah", "ilmu", "impian", "ingat", "ingin", "ini", "itu", "isi", "istri", "izin", "iklan", "imajinasi", "industri", "informasi", "inovasi", "inspirasi", "institusi", "investasi",
+    "jalan", "jari", "jeruk", "jendela", "jantung", "jauh", "jadi", "jam", "jangan", "jawab", "jelas", "jenis", "jiwa", "juga", "jumlah",
+    "kucing", "kaki", "kepala", "kecil", "keras", "kata", "kamar", "kamu", "karena", "kelas", "keluar", "kemarin", "kembali", "kerja", "kiri", "kulit", "kunci", "kursi", "kurus", "kusam",
+    "laut", "langit", "lampu", "lemon", "luas", "lama", "laki", "lain", "lalu", "langsung", "lapang", "lari", "lawan", "lebih", "leher", "lemah", "lembut", "lengkap", "licin", "lidah",
+    "mata", "makan", "manis", "merah", "mobil", "malam", "masuk", "mereka", "memang", "melihat", "minum", "minggu", "minta", "milik", "musik", "mahal", "main", "mandi", "masak", "matahari",
+    "nasi", "nama", "nyaman", "normal", "negara", "nanti", "naik", "nasib", "noda", "nomor", "nanas", "nenek", "nikah", "nyanyi", "nyata",
+    "orang", "obat", "otak", "olah", "organ", "oleh", "ombak", "operasi", "opini", "optimal", "oven", "oval", "otot", "owner", "oksigen",
+    "pagi", "putih", "pohon", "pintu", "panas", "pakai", "pasti", "pasar", "pergi", "perang", "penting", "pesan", "petani", "pikir", "pilih", "panci", "pantai", "papan", "parah", "parkir",
+    "rumah", "rasa", "rambut", "rajin", "rakyat", "rahasia", "rapat", "ratu", "rawat", "rekan", "resep", "ringan", "rokok", "ruang", "roti", "radio", "ramai", "rapat", "rusak", "riang",
+    "saya", "sekolah", "siang", "suara", "segar", "sama", "sampai", "sakit", "satu", "semua", "sekarang", "selalu", "sebelum", "siapa", "sini", "sabar", "sapu", "sate", "sehat", "senang",
+    "tangan", "teknisi", "teman", "terang", "tinggi", "tahun", "tahu", "takut", "tanah", "tempat", "tengah", "terima", "tidak", "tidur", "tiap", "toko", "tomat", "topi", "tulis", "tutup",
+    "udara", "uang", "umur", "untuk", "utara", "ujung", "ulang", "umum", "unit", "upaya", "ular", "ubin", "ubah", "ucap", "ujian",
+    "vitamin", "video", "virtual", "volume", "variasi", "versi", "villa", "virus", "vokal", "voucher",
+    "warna", "waktu", "wajah", "warung", "wayang", "wangi", "wanita", "wilayah", "wisata", "wujud", "wafer", "wagon", "walau", "waris", "wasit",
+    "yang", "yakin", "yoga", "yayasan", "yuk", "yuran", "yatim", "yaitu", "yodium", "yogurt",
+    "zona", "zaman", "zombie", "zoom", "zero", "zodiak"
+}
+
+-- Function to extract words from TXT content (ULTRA FAST)
+local function extractWordsFromTxtContent(txtContent)
+    local words = {}
+    local wordSet = {} -- For fast duplicate checking
+    
+    print("📄 ULTRA FAST processing, size:", #txtContent, "bytes")
+    
+    if dbStatus then
+        dbStatus.Text = "Fast processing..."
+        dbStatus.TextColor3 = Color3.fromRGB(255, 255, 0)
+    end
+    
+    -- ULTRA FAST - no yields during processing
+    local lineCount = 0
+    local startTime = tick()
+    
+    -- Process in chunks to avoid timeout
+    local lines = {}
+    for line in txtContent:gmatch("[^\r\n]+") do
+        table.insert(lines, line)
+    end
+    
+    print("📄 Found", #lines, "total lines, processing...")
+    
+    -- Process all lines without yields
+    for i, line in ipairs(lines) do
+        lineCount = lineCount + 1
+        local cleanWord = line:lower():gsub("%s+", ""):gsub("[^%w%-]", "")
+        
+        -- Filter valid Indonesian words (NO SYMBOLS)
+        if cleanWord ~= "" and #cleanWord > 1 and #cleanWord < 25 then
+            -- STRICT: Must contain only letters (no hyphens, numbers, symbols)
+            if cleanWord:match("^[a-z]+$") then
+                -- Fast duplicate check using hash table
+                if not wordSet[cleanWord] then
+                    wordSet[cleanWord] = true
+                    table.insert(words, cleanWord)
+                end
+            end
+        end
+        
+        -- Only yield every 50k lines (much less frequent)
+        if lineCount % 50000 == 0 then
+            print("📄 Processed", lineCount, "lines, found", #words, "words")
+            wait(0.001) -- Minimal yield
+        end
+    end
+    
+    local totalTime = tick() - startTime
+    print("📄 ULTRA FAST COMPLETE:", #words, "words from", lineCount, "lines in", math.floor(totalTime * 100) / 100, "seconds")
+    return words
+end
+
+-- Function to download 79k database (WORKING METHOD FROM BACKUP)
+local function download79kDatabase()
+    if not dbStatus then
+        print("❌ ERROR: dbStatus not found")
+        return
+    end
+    
+    dbStatus.Text = "Downloading database..."
+    dbStatus.TextColor3 = Color3.fromRGB(255, 255, 0)
+    
+    if not loadBtn then
+        print("❌ ERROR: loadBtn not found")
+        return
+    end
+    
+    loadBtn.Text = "LOADING..."
+    loadBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+    
+    spawn(function()
+        local success = false
+        local downloadedWords = {}
+        
+        print("🔄 Starting download with 10 second timeout...")
+        
+        -- WORKING METHOD with timeout
+        local downloadSuccess = false
+        local response = nil
+        
+        spawn(function()
+            local ok, result = pcall(function()
+                return game:HttpGet(GITHUB_79K_URL, true)
+            end)
+            
+            if ok and result and #result > 50000 then
+                response = result
+                downloadSuccess = true
+                print("✅ Download completed:", #result, "bytes")
+            else
+                print("❌ Download failed or too small:", result and #result or "nil")
+            end
+        end)
+        
+        -- Wait max 10 seconds for download
+        local waitTime = 0
+        while not downloadSuccess and waitTime < 10 do
+            wait(0.5)
+            waitTime = waitTime + 0.5
+            dbStatus.Text = "Downloading... " .. math.ceil(10 - waitTime) .. "s"
+        end
+        
+        if downloadSuccess and response then
+            print("✅ Processing downloaded content...")
+            dbStatus.Text = "Processing words..."
+            dbStatus.TextColor3 = Color3.fromRGB(0, 255, 255)
+            
+            -- Give more time for processing
+            wait(0.1)
+            
+            -- Extract words with timeout protection
+            local processingSuccess = false
+            local extractedWords = {}
+            
+            spawn(function()
+                extractedWords = extractWordsFromTxtContent(response)
+                processingSuccess = true
+            end)
+            
+            -- Wait max 15 seconds for processing
+            local processWait = 0
+            while not processingSuccess and processWait < 15 do
+                wait(0.5)
+                processWait = processWait + 0.5
+                if dbStatus then
+                    dbStatus.Text = "Processing... " .. math.ceil(15 - processWait) .. "s"
+                end
+            end
+            
+            if processingSuccess and #extractedWords > 10000 then
+                downloadedWords = extractedWords
+                success = true
+                print("✅ Processing SUCCESS:", #downloadedWords, "words extracted")
+            else
+                print("⚠️ Processing timeout or failed, extracted:", #extractedWords, "words")
+            end
+        else
+            print("❌ Download timeout or failed")
+        end
+        
+        if success and #downloadedWords > 5000 then
+            allWords = downloadedWords
+            databaseLoaded = true
+            
+            dbStatus.Text = "Database: " .. #allWords .. " kata loaded"
+            dbStatus.TextColor3 = Color3.fromRGB(0, 255, 0)
+            
+            loadBtn.Text = "✓ LOADED"
+            loadBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+            startBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+            
+            if statsLabel then
+                statsLabel.Text = "Success: " .. successCount .. " | Blocked: " .. blockedCount .. " | DB: " .. #allWords .. " kata"
+            end
+            
+            print("🎉 SUCCESS: Loaded", #allWords, "Indonesian words!")
+        else
+            -- Use fallback database
+            allWords = fallbackWords
+            databaseLoaded = true
+            
+            dbStatus.Text = "Database: " .. #allWords .. " kata (fallback)"
+            dbStatus.TextColor3 = Color3.fromRGB(255, 150, 0)
+            
+            loadBtn.Text = "FALLBACK"
+            loadBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 0)
+            startBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+            
+            if statsLabel then
+                statsLabel.Text = "Success: " .. successCount .. " | Blocked: " .. blockedCount .. " | DB: " .. #allWords .. " kata"
+            end
+            
+            print("⚠️ Using fallback database:", #allWords, "words")
+        end
+    end)
+end
+
+-- Find word function - SIMPLE and RELIABLE
+-- excludeSet: table berisi kata (uppercase) yang harus di-skip
+local function findWord(prefix, excludeSet)
+    prefix = string.upper(prefix)
+    excludeSet = excludeSet or {}
+    local shortWords = {}   -- 4-6 huruf (ideal, cepat diketik)
+    local mediumWords = {}  -- 7-9 huruf
+    local anyWords = {}     -- fallback
+    
+    print("🔍 SIMPLE SEARCH for prefix:", prefix)
+    
+    if not databaseLoaded or #allWords == 0 then
+        print("  ❌ DATABASE NOT READY")
+        return nil
+    end
+    
+    -- Simple search - find all matching words
+    for _, word in pairs(allWords) do
+        local upperWord = string.upper(word)
+        if string.sub(upperWord, 1, #prefix) == prefix and not excludeSet[upperWord] then
+            local len = #word
+            if len >= 4 and len <= 6 then
+                table.insert(shortWords, word)
+            elseif len >= 7 and len <= 9 then
+                table.insert(mediumWords, word)
+            elseif len >= 3 and len <= 12 then
+                table.insert(anyWords, word)
+            end
+        end
+    end
+    
+    -- Prioritas: pendek dulu supaya cepat diketik dan tidak overlap
+    local pool = #shortWords > 0 and shortWords or (#mediumWords > 0 and mediumWords or anyWords)
+    
+    print("  Short(4-6):", #shortWords, "| Medium(7-9):", #mediumWords, "| Any:", #anyWords)
+    
+    if #pool > 0 then
+        local selectedWord = pool[math.random(1, #pool)]
+        print("  🎯 Selected:", selectedWord, "(len:", #selectedWord, ")")
+        return selectedWord
+    end
+    
+    print("  ❌ No matches found")
+    return nil
+end
+local isTyping = false
+local currentPrefix = ""
+
+local function sendBackspace(count)
+    for i = 1, count do
+        pcall(function()
+            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Backspace, false, game)
+            wait(0.03)
+            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Backspace, false, game)
+        end)
+        wait(0.03)
+    end
+end
+
+local function typeWord(word)
+    for i = 1, #word do
+        local char = string.upper(string.sub(word, i, i))
+        local kc = Enum.KeyCode[char]
+        if kc then
+            pcall(function()
+                VirtualInputManager:SendKeyEvent(true, kc, false, game)
+                wait(0.05)
+                VirtualInputManager:SendKeyEvent(false, kc, false, game)
+            end)
+            wait(0.08)
+        end
+    end
+end
+
+local function safeTyping(detectedPrefix, wordLabel)
+    local rejectedWords = {}
+
+    while true do
+        -- Cari kata
+        local word = findWord(detectedPrefix, rejectedWords)
+        if not word then
+            if statusLabel then statusLabel.Text = "Tidak ada kata untuk: " .. detectedPrefix end
+            isTyping = false
+            return
+        end
+        rejectedWords[word:upper()] = true
+
+        -- Hapus + ketik
+        sendBackspace(15)
+        wait(0.1)
+        local remaining = string.sub(word, #detectedPrefix + 1)
+        if statusLabel then statusLabel.Text = "TYPING: " .. detectedPrefix .. " → " .. word end
+        typeWord(remaining)
+        wait(0.2)
+
+        -- Enter
+        pcall(function()
+            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
+            wait(0.05)
+            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
+        end)
+
+        -- Tunggu 1 detik setelah enter
+        wait(1)
+
+        -- Cek awalan - kalau berubah berarti diterima, berhenti
+        if wordLabel and wordLabel.Parent then
+            local newText = wordLabel.Text
+            if not newText or newText:upper() ~= detectedPrefix:upper() then
+                successCount = successCount + 1
+                if statsLabel then statsLabel.Text = "Success: " .. successCount .. " | Blocked: " .. blockedCount .. " | DB: " .. #allWords .. " kata" end
+                if statusLabel then statusLabel.Text = "SUCCESS: " .. word end
+                isTyping = false
+                return
+            end
+        else
+            isTyping = false
+            return
+        end
+
+        -- Awalan masih sama = ditolak, ulangi dengan kata lain
+        print("REJECTED:", word, "- coba lain")
+    end
+end
+
+local function processSafeDetection(prefix, wordLabel)
+    if not databaseLoaded then return end
+    if isTyping then return end
+
+    isTyping = true
+    currentPrefix = prefix:upper()
+    spawn(function()
+        safeTyping(prefix, wordLabel)
+    end)
+end
+-- Monitoring - scan semua descendants di PlayerGui, sama seperti file 1.lua
+local function startFocusedMonitoring()
+    if not databaseLoaded then
+        statusLabel.Text = "Status: ERROR - Database not loaded | Click LOAD 79K first"
+        return
+    end
+    
+    if isActive then return end
+    isActive = true
+    
+    startBtn.Text = "ACTIVE"
+    startBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+    
+    local playerGui = LocalPlayer:WaitForChild("PlayerGui")
+    local myUsername = LocalPlayer.Name
+    statusLabel.Text = "Status: SCANNING..."
+    
+    spawn(function()
+        wait(1)
+        
+        print("MONITORING:", myUsername)
+        myTextBoxes = {}
+
+        local function attachToObject(obj)
+            local objName = obj.Name:lower()
+            local objPath = obj:GetFullName():lower()
+
+            -- Harus di PlayerGui kita
+            local yourPlayerGuiPath = "players." .. myUsername:lower() .. ".playergui"
+            if not objPath:find(yourPlayerGuiPath, 1, true) then return end
+
+            -- Harus nama mengandung "word"
+            if not objName:find("word") then return end
+
+            print("  ATTACH:", obj:GetFullName())
+            table.insert(myTextBoxes, obj)
+
+            local connection = obj:GetPropertyChangedSignal("Text"):Connect(function()
+                local text = obj.Text
+                if text and #text >= 1 and #text <= 3 and text:match("^[A-Za-z]+$") then
+                    -- Tunggu sebentar pastikan awalan sudah final (handle 2 huruf seperti "AX")
+                    wait(0.3)
+                    local finalText = obj.Text
+                    if finalText == text then
+                        processSafeDetection(finalText, obj)
+                    end
+                end
+            end)
+            table.insert(monitorConnections, connection)
+        end
+
+        local function scanDescendants(parent)
+            for _, obj in pairs(parent:GetDescendants()) do
+                if obj:IsA("TextLabel") or obj:IsA("TextBox") then
+                    attachToObject(obj)
+                end
+            end
+        end
+
+        -- Scan semua yang sudah ada di PlayerGui
+        scanDescendants(playerGui)
+
+        -- Tunggu MatchUI kalau belum ada
+        local addConn = playerGui.ChildAdded:Connect(function(child)
+            if child.Name == "MatchUI" and isActive then
+                wait(0.5)
+                scanDescendants(child)
+                statusLabel.Text = "Status: ACTIVE - " .. #myTextBoxes .. " monitor"
+            end
+        end)
+        table.insert(monitorConnections, addConn)
+
+        statusLabel.Text = "Status: ACTIVE - " .. #myTextBoxes .. " monitor"
+        print("Monitoring", #myTextBoxes, "elements untuk", myUsername)
+    end)
+end
+
+-- Stop monitoring
+local function stopFocusedMonitoring()
+    isActive = false
+    
+    for _, connection in pairs(monitorConnections) do
+        connection:Disconnect()
+    end
+    monitorConnections = {}
+    myTextBoxes = {}
+    currentFocusedTextBox = nil
+    
+    startBtn.Text = "START"
+    startBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+    statusLabel.Text = "Status: STOPPED"
+    
+    print("🛑 Strict monitoring stopped")
+end
+
+-- Button handlers with error protection
+loadBtn.MouseButton1Click:Connect(function()
+    print("🔘 LOAD button clicked!")
+    
+    pcall(function()
+        print("  Database loaded:", databaseLoaded)
+        print("  Current words count:", #allWords)
+        
+        if not databaseLoaded then
+            print("  Starting download...")
+            download79kDatabase()
+        else
+            print("  Database already loaded, forcing reload...")
+            databaseLoaded = false
+            allWords = {}
+            download79kDatabase()
+        end
+    end)
+end)
+
+startBtn.MouseButton1Click:Connect(function()
+    pcall(startFocusedMonitoring)
+end)
+
+stopBtn.MouseButton1Click:Connect(function()
+    pcall(stopFocusedMonitoring)
+end)
+
+print("📱 FEDLY HUB loaded - Mobile-friendly word chain bypass!")
